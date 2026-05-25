@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PHOBIA FINDER — The Shadows Know</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700;900&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --blood:#8b0000;
+  --crimson:#c0392b;
+  --ember:#ff4500;
+  --ash:#1a1a1a;
+  --pale:#c8bfb0;
+  --ghost:#e8e0d5;
+  --void:#050505;
+  --glow:rgba(139,0,0,0.6);
+}
+
+html,body{
+  width:100%;height:100%;
+  overflow-x:hidden;
+  background:var(--void);
+  cursor:none;
+}
+
+/* ── CUSTOM CURSOR ── */
+#cursor{
+  position:fixed;width:16px;height:16px;
+  border:1px solid var(--crimson);
+  border-radius:50%;
+  pointer-events:none;
+  transform:translate(-50%,-50%);
+  z-index:9999;
+  transition:transform .1s,border-color .2s;
+  mix-blend-mode:difference;
+}
+#cursor::after{
+  content:'';position:absolute;
+  top:50%;left:50%;
+  width:4px;height:4px;
+  background:var(--ember);
+  border-radius:50%;
+  transform:translate(-50%,-50%);
+}
+#cursor.hovering{transform:translate(-50%,-50%) scale(2.5);border-color:var(--ember)}
+
+/* ── CANVAS BACKGROUND ── */
+#bgCanvas{
+  position:fixed;inset:0;
+  z-index:0;
+  pointer-events:none;
+}
+
+/* ── VIGNETTE ── */
+.vignette{
+  position:fixed;inset:0;
+  background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,.95) 100%);
+  z-index:1;pointer-events:none;
+}
+
+/* ── SCANLINES ── */
+.scanlines{
+  position:fixed;inset:0;
+  background:repeating-linear-gradient(
+    0deg,
+    transparent,transparent 2px,
+    rgba(0,0,0,.08) 2px,rgba(0,0,0,.08) 4px
+  );
+  z-index:2;pointer-events:none;opacity:.6;
+}
+
+/* ── BLOOD DRIPS ── */
+.drip-container{
+  position:fixed;top:0;left:0;width:100%;
+  z-index:3;pointer-events:none;
+}
+.drip{
+  position:absolute;top:0;
+  width:2px;
+  background:linear-gradient(to bottom,var(--blood),transparent);
+  transform-origin:top;
+  animation:drip-fall var(--dur,8s) var(--delay,0s) ease-in infinite;
+}
+@keyframes drip-fall{
+  0%{height:0;opacity:.8}
+  60%{opacity:.8}
+  100%{height:var(--len,120px);opacity:0;transform:translateY(20px)}
+}
+
+/* ── CONTAINER ── */
+.container{
+  position:relative;z-index:10;
+  min-height:100vh;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:40px 20px 80px;
+  font-family:'IM Fell English',serif;
+}
+
+/* ── TITLE ── */
+.title-wrap{position:relative;margin-bottom:8px}
+.title{
+  font-family:'Cinzel Decorative',serif;
+  font-size:clamp(2.2rem,7vw,5.5rem);
+  font-weight:900;
+  letter-spacing:clamp(4px,2vw,14px);
+  color:var(--ghost);
+  text-shadow:0 0 20px var(--blood),0 0 60px rgba(139,0,0,.4);
+  animation:flicker 4s infinite;
+  user-select:none;
+}
+.title-under{
+  font-family:'Cinzel Decorative',serif;
+  font-size:clamp(.55rem,1.5vw,.85rem);
+  letter-spacing:clamp(4px,2vw,12px);
+  color:var(--blood);
+  text-align:center;
+  margin-top:4px;
+  opacity:.9;
+}
+
+@keyframes flicker{
+  0%,93%,95%,97%,100%{opacity:1}
+  94%{opacity:.3}
+  96%{opacity:.7}
+  98%{opacity:.2}
+}
+
+/* ── DIVIDER ── */
+.divider{
+  width:clamp(140px,40vw,320px);height:1px;
+  background:linear-gradient(to right,transparent,var(--blood),transparent);
+  margin:24px auto;
+  position:relative;
+}
+.divider::before{
+  content:'✦';
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  color:var(--blood);font-size:12px;
+  background:var(--void);padding:0 8px;
+}
+
+/* ── SUBTITLE ── */
+.subtitle{
+  font-style:italic;
+  color:var(--pale);
+  opacity:.65;
+  margin-bottom:44px;
+  font-size:clamp(.85rem,2vw,1.05rem);
+  letter-spacing:2px;
+  text-align:center;
+}
+
+/* ── INPUT AREA ── */
+.input-wrap{
+  display:flex;flex-direction:column;
+  align-items:center;gap:0;
+  position:relative;
+  width:100%;max-width:480px;
+}
+.input-label{
+  font-size:.7rem;letter-spacing:4px;
+  color:var(--blood);
+  margin-bottom:10px;
+  text-transform:uppercase;
+}
+.input-row{
+  display:flex;width:100%;
+  border:1px solid rgba(139,0,0,.5);
+  position:relative;
+  overflow:hidden;
+}
+.input-row::before{
+  content:'';
+  position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(139,0,0,.05),transparent);
+  pointer-events:none;
+}
+input[type=text]{
+  flex:1;
+  padding:16px 20px;
+  background:rgba(5,5,5,.95);
+  border:none;
+  color:var(--ghost);
+  font-family:'IM Fell English',serif;
+  font-size:1rem;
+  outline:none;
+  caret-color:var(--crimson);
+  letter-spacing:1px;
+  cursor:none;
+}
+input[type=text]::placeholder{color:rgba(200,191,176,.3)}
+input[type=text]:focus{background:rgba(20,5,5,.95)}
+
+.reveal-btn{
+  padding:16px 24px;
+  background:var(--blood);
+  border:none;
+  color:var(--ghost);
+  font-family:'Cinzel Decorative',serif;
+  font-size:.65rem;
+  letter-spacing:2px;
+  cursor:none;
+  transition:background .3s,box-shadow .3s;
+  white-space:nowrap;
+  position:relative;
+  overflow:hidden;
+}
+.reveal-btn::after{
+  content:'';
+  position:absolute;inset:0;
+  background:linear-gradient(to bottom,rgba(255,255,255,.05),transparent);
+}
+.reveal-btn:hover{
+  background:#a00000;
+  box-shadow:0 0 24px rgba(139,0,0,.7);
+}
+.reveal-btn:disabled{
+  background:#3a0000;
+  color:rgba(200,191,176,.4);
+}
+
+/* ── LOADING STATE ── */
+.loading-text{
+  font-style:italic;
+  color:var(--blood);
+  font-size:.85rem;
+  letter-spacing:3px;
+  margin-top:30px;
+  height:24px;
+  opacity:0;
+  transition:opacity .5s;
+}
+.loading-text.visible{opacity:1}
+
+/* ── RESULT AREA ── */
+.result{
+  width:100%;max-width:600px;
+  margin-top:50px;
+  border:1px solid rgba(139,0,0,.25);
+  padding:clamp(24px,5vw,44px);
+  background:rgba(5,0,0,.6);
+  backdrop-filter:blur(4px);
+  position:relative;
+  animation:rise 1.2s ease forwards;
+  display:none;
+}
+.result.show{display:block}
+.result::before,.result::after{
+  content:'';position:absolute;
+  width:16px;height:16px;
+  border-color:var(--blood);border-style:solid;
+}
+.result::before{top:-1px;left:-1px;border-width:1px 0 0 1px}
+.result::after{bottom:-1px;right:-1px;border-width:0 1px 1px 0}
+
+@keyframes rise{
+  from{opacity:0;transform:translateY(30px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+.result-tag{
+  font-size:.6rem;letter-spacing:5px;
+  color:var(--blood);
+  text-transform:uppercase;
+  margin-bottom:20px;
+  display:block;
+}
+
+.phobia-name{
+  font-family:'Cinzel Decorative',serif;
+  font-size:clamp(1.4rem,5vw,2.6rem);
+  color:var(--ghost);
+  text-shadow:0 0 20px var(--blood);
+  margin-bottom:6px;
+  min-height:2.5em;
+  line-height:1.2;
+}
+
+.phobia-etymology{
+  font-size:.75rem;
+  color:rgba(200,191,176,.45);
+  letter-spacing:2px;
+  margin-bottom:24px;
+  font-style:italic;
+  min-height:1.4em;
+}
+
+/* ── FEAR METER ── */
+.meter-label{
+  font-size:.6rem;letter-spacing:4px;
+  color:rgba(200,191,176,.5);
+  margin-bottom:8px;
+  display:flex;justify-content:space-between;
+}
+.meter{
+  width:100%;height:6px;
+  background:rgba(255,255,255,.05);
+  margin-bottom:6px;
+  position:relative;
+  overflow:hidden;
+}
+.meter-fill{
+  height:100%;width:0%;
+  background:linear-gradient(to right,var(--blood),var(--ember));
+  transition:width 2.5s cubic-bezier(.17,.67,.4,1);
+  position:relative;
+}
+.meter-fill::after{
+  content:'';
+  position:absolute;right:0;top:0;
+  width:3px;height:100%;
+  background:white;
+  box-shadow:0 0 8px var(--ember);
+  animation:pulse-tip 1s ease infinite;
+}
+@keyframes pulse-tip{0%,100%{opacity:1}50%{opacity:.4}}
+.meter-value{
+  text-align:right;
+  font-size:.65rem;
+  color:var(--ember);
+  letter-spacing:2px;
+  min-height:1em;
+}
+
+/* ── MEANING ── */
+.phobia-meaning{
+  font-size:clamp(.9rem,2vw,1.05rem);
+  color:var(--pale);
+  line-height:1.8;
+  margin:24px 0 20px;
+  min-height:2em;
+  border-left:2px solid var(--blood);
+  padding-left:16px;
+  font-style:italic;
+}
+
+/* ── LORE ── */
+.lore-label{
+  font-size:.6rem;letter-spacing:4px;
+  color:var(--blood);opacity:.7;
+  margin-bottom:10px;
+}
+.fear-lore{
+  font-size:clamp(.85rem,1.8vw,1rem);
+  color:rgba(200,191,176,.7);
+  line-height:1.9;
+  min-height:3em;
+}
+
+/* ── TAGS / TRAITS ── */
+.trait-row{
+  display:flex;flex-wrap:wrap;gap:8px;
+  margin-top:28px;
+}
+.trait{
+  font-size:.6rem;letter-spacing:3px;
+  padding:5px 12px;
+  border:1px solid rgba(139,0,0,.35);
+  color:rgba(200,191,176,.5);
+  text-transform:uppercase;
+}
+
+/* ── ACTION ROW ── */
+.action-row{
+  display:flex;gap:12px;margin-top:32px;flex-wrap:wrap;
+}
+.action-btn{
+  flex:1;min-width:120px;
+  padding:12px 16px;
+  background:transparent;
+  border:1px solid rgba(139,0,0,.4);
+  color:rgba(200,191,176,.6);
+  font-family:'IM Fell English',serif;
+  font-size:.75rem;
+  letter-spacing:2px;
+  cursor:none;
+  transition:all .3s;
+  text-align:center;
+}
+.action-btn:hover{
+  border-color:var(--blood);
+  color:var(--ghost);
+  background:rgba(139,0,0,.1);
+}
+
+/* ── SHARE TOAST ── */
+.toast{
+  position:fixed;bottom:30px;left:50%;
+  transform:translateX(-50%) translateY(20px);
+  background:rgba(20,0,0,.95);
+  border:1px solid var(--blood);
+  color:var(--ghost);
+  font-size:.75rem;
+  letter-spacing:2px;
+  padding:12px 24px;
+  z-index:9998;
+  opacity:0;
+  transition:all .4s;
+  pointer-events:none;
+  white-space:nowrap;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── HISTORY PANEL ── */
+.history{
+  width:100%;max-width:600px;
+  margin-top:20px;
+}
+.history-title{
+  font-size:.6rem;letter-spacing:5px;
+  color:rgba(139,0,0,.5);
+  text-transform:uppercase;
+  margin-bottom:12px;
+}
+.history-list{
+  display:flex;flex-direction:column;gap:8px;
+}
+.history-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;
+  border:1px solid rgba(139,0,0,.15);
+  background:rgba(5,0,0,.4);
+  cursor:none;
+  transition:border-color .3s;
+  animation:rise .5s ease forwards;
+}
+.history-item:hover{border-color:rgba(139,0,0,.4)}
+.history-item-name{font-size:.75rem;color:var(--pale);letter-spacing:1px}
+.history-item-phobia{font-size:.65rem;color:var(--blood);letter-spacing:2px;font-style:italic}
+.history-item-level{font-size:.6rem;color:rgba(200,191,176,.4);letter-spacing:1px}
+
+/* ── GLITCH ── */
+.glitch{position:relative}
+.glitch::before,.glitch::after{
+  content:attr(data-text);
+  position:absolute;top:0;left:0;width:100%;height:100%;
+}
+.glitch::before{
+  color:var(--crimson);
+  clip-path:polygon(0 0,100% 0,100% 45%,0 45%);
+  animation:glitch-top .3s infinite;
+  opacity:0;
+}
+.glitch::after{
+  color:rgba(0,100,255,.5);
+  clip-path:polygon(0 55%,100% 55%,100% 100%,0 100%);
+  animation:glitch-bot .3s infinite .15s;
+  opacity:0;
+}
+.glitch.active::before,.glitch.active::after{opacity:1}
+@keyframes glitch-top{
+  0%{transform:translate(0)}40%{transform:translate(-3px,1px)}60%{transform:translate(3px,-1px)}100%{transform:translate(0)}
+}
+@keyframes glitch-bot{
+  0%{transform:translate(0)}40%{transform:translate(3px,1px)}60%{transform:translate(-3px,-1px)}100%{transform:translate(0)}
+}
+
+/* ── SHAKE ── */
+@keyframes shake{
+  0%,100%{transform:translate(0)}
+  10%{transform:translate(-6px,3px)}
+  20%{transform:translate(6px,-3px)}
+  30%{transform:translate(-4px,6px)}
+  40%{transform:translate(4px,-2px)}
+  50%{transform:translate(-2px,4px)}
+  60%{transform:translate(6px,2px)}
+  70%{transform:translate(-6px,-4px)}
+  80%{transform:translate(4px,6px)}
+  90%{transform:translate(-4px,-2px)}
+}
+.shake{animation:shake .6s ease}
+
+/* ── RESPONSIVE ── */
+@media(max-width:480px){
+  .input-row{flex-direction:column}
+  .reveal-btn{padding:14px;font-size:.6rem}
+  .action-row{flex-direction:column}
+}
+</style>
+</head>
+<body>
+
+<div id="cursor"></div>
+<canvas id="bgCanvas"></canvas>
+<div class="vignette"></div>
+<div class="scanlines"></div>
+<div class="drip-container" id="dripContainer"></div>
+
+<main class="container">
+  <div class="title-wrap">
+    <h1 class="title glitch" id="mainTitle" data-text="PHOBIA FINDER">PHOBIA FINDER</h1>
+    <div class="title-under">◈ THE SHADOWS ALREADY KNOW ◈</div>
+  </div>
+
+  <div class="divider"></div>
+  <p class="subtitle">Offer your name to the dark.<br>Receive the truth in return.</p>
+
+  <div class="input-wrap">
+    <div class="input-label">◈ Enter Your Name ◈</div>
+    <div class="input-row">
+      <input type="text" id="userName" placeholder="Your name, if you dare…" maxlength="60" autocomplete="off"/>
+      <button class="reveal-btn" id="detectBtn">REVEAL FEAR</button>
+    </div>
+    <p class="loading-text" id="loadingText">The void is reading your soul…</p>
+  </div>
+
+  <div class="result" id="resultArea">
+    <span class="result-tag">◈ Soul Reading Complete ◈</span>
+    <h2 class="phobia-name glitch" id="phobiaName" data-text=""></h2>
+    <p class="phobia-etymology" id="phobiaEtymology"></p>
+    <div class="meter-label"><span>FEAR INTENSITY</span><span id="meterLabel">—</span></div>
+    <div class="meter"><div class="meter-fill" id="fearMeter"></div></div>
+    <p class="meter-value" id="meterValue"></p>
+    <p class="phobia-meaning" id="phobiaMeaning"></p>
+    <div class="lore-label">◈ Ancient Lore ◈</div>
+    <div class="fear-lore" id="fearLore"></div>
+    <div class="trait-row" id="traitRow"></div>
+    <div class="action-row">
+      <button class="action-btn" id="shareBtn">⟁ Copy Result</button>
+      <button class="action-btn" id="againBtn">↺ Another Reading</button>
+    </div>
+  </div>
+
+  <div class="history" id="historyWrap" style="display:none">
+    <div class="history-title">◈ Previous Readings ◈</div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+</main>
+
+<div class="toast" id="toast">Copied to clipboard</div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   CURSOR
+═══════════════════════════════════════════════ */
+const cursor = document.getElementById('cursor');
+document.addEventListener('mousemove', e => {
+  cursor.style.left = e.clientX + 'px';
+  cursor.style.top  = e.clientY + 'px';
+});
+document.querySelectorAll('button,input,a,.history-item').forEach(el => {
+  el.addEventListener('mouseenter', () => cursor.classList.add('hovering'));
+  el.addEventListener('mouseleave', () => cursor.classList.remove('hovering'));
+});
+
+/* ═══════════════════════════════════════════════
+   PARTICLE / EMBER CANVAS
+═══════════════════════════════════════════════ */
+const canvas = document.getElementById('bgCanvas');
+const ctx    = canvas.getContext('2d');
+let W, H, particles = [];
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+class Particle {
+  constructor() { this.reset(true) }
+  reset(init = false) {
+    this.x  = Math.random() * W;
+    this.y  = init ? Math.random() * H : H + 10;
+    this.r  = Math.random() * 1.8 + .3;
+    this.vy = -(Math.random() * .6 + .2);
+    this.vx = (Math.random() - .5) * .3;
+    this.life = 1;
+    this.decay = Math.random() * .004 + .001;
+    this.hue = Math.random() > .7 ? 20 : 0; // mostly red, some orange
+  }
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.life -= this.decay;
+    if (this.life <= 0 || this.y < -10) this.reset();
+  }
+  draw() {
+    ctx.save();
+    ctx.globalAlpha = this.life * .6;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+    ctx.fillStyle = `hsl(${this.hue},90%,45%)`;
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+for (let i = 0; i < 120; i++) particles.push(new Particle());
+
+function drawBg() {
+  ctx.clearRect(0, 0, W, H);
+
+  // subtle radial fog
+  const grd = ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,W*.7);
+  grd.addColorStop(0,'rgba(30,0,0,.25)');
+  grd.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0,0,W,H);
+
+  particles.forEach(p => { p.update(); p.draw(); });
+  requestAnimationFrame(drawBg);
+}
+drawBg();
+
+/* ═══════════════════════════════════════════════
+   BLOOD DRIPS
+═══════════════════════════════════════════════ */
+function spawnDrips() {
+  const container = document.getElementById('dripContainer');
+  for (let i = 0; i < 14; i++) {
+    const d = document.createElement('div');
+    d.className = 'drip';
+    d.style.left  = (Math.random() * 100) + '%';
+    d.style.setProperty('--dur', (Math.random() * 6 + 5) + 's');
+    d.style.setProperty('--delay', (Math.random() * 12) + 's');
+    d.style.setProperty('--len', (Math.random() * 80 + 60) + 'px');
+    container.appendChild(d);
+  }
+}
+spawnDrips();
+
+/* ═══════════════════════════════════════════════
+   WEB AUDIO — ambient drone (no external file)
+═══════════════════════════════════════════════ */
+let audioCtx = null;
+function startAmbient() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  function makeDrone(freq, gain) {
+    const osc = audioCtx.createOscillator();
+    const g   = audioCtx.createGain();
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass'; filter.frequency.value = 300;
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+    g.gain.value = gain;
+    osc.connect(filter); filter.connect(g); g.connect(audioCtx.destination);
+    osc.start();
+    // slow LFO on gain
+    const lfo = audioCtx.createOscillator();
+    const lfoG = audioCtx.createGain();
+    lfo.frequency.value = .05 + Math.random()*.05;
+    lfoG.gain.value = gain * .6;
+    lfo.connect(lfoG); lfoG.connect(g.gain);
+    lfo.start();
+    return osc;
+  }
+
+  makeDrone(40, .012);
+  makeDrone(55, .008);
+  makeDrone(80, .005);
+  makeDrone(27.5, .015);
+}
+
+function playReveal() {
+  if (!audioCtx) return;
+  const osc  = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const distortion = audioCtx.createWaveShaper();
+  function makeDistCurve(amount) {
+    const n = 256, curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = i * 2 / n - 1;
+      curve[i] = (Math.PI + amount) * x / (Math.PI + amount * Math.abs(x));
+    }
+    return curve;
+  }
+  distortion.curve = makeDistCurve(200);
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(80, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 1.5);
+  gain.gain.setValueAtTime(.18, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(.001, audioCtx.currentTime + 2);
+  osc.connect(distortion); distortion.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + 2.2);
+}
+
+/* ═══════════════════════════════════════════════
+   PHOBIA FALLBACK DATA
+═══════════════════════════════════════════════ */
+const PHOBIAS = [
+  { name:"Nyctophobia",   etymology:"nyx (night) + phobos (fear)",    meaning:"An overwhelming dread of darkness, where absence of light becomes a suffocating presence.", lore:"In the darkest hours before dawn, those afflicted see shapes that waking eyes refuse to show them. The mind, deprived of vision, paints horrors from memory and imagination.", level:92, traits:["NOCTURNAL","PRIMAL","ANCIENT"] },
+  { name:"Thalassophobia",etymology:"thalassa (sea) + phobos (fear)", meaning:"Terror of deep, open waters — not of drowning, but of what breathes below the surface.", lore:"The ocean has existed for four billion years. Humanity for a fraction of a second. Those who fear it are simply aware of the mathematics.", level:88, traits:["OCEANIC","VASTNESS","UNKNOWN DEPTHS"] },
+  { name:"Chronophobia",  etymology:"chronos (time) + phobos (fear)", meaning:"The creeping horror that every second is a theft — pulling the self toward an inescapable void.", lore:"Clocks do not measure time. They count the steps of something walking toward you that cannot be outrun.", level:96, traits:["EXISTENTIAL","TERMINAL","INEVITABLE"] },
+  { name:"Kenophobia",    etymology:"kenos (empty) + phobos (fear)",  meaning:"Paralysis in the face of vast empty spaces — rooms, plains, skies stripped of all content.", lore:"The fear is not the emptiness itself. It is the growing sense that the emptiness is observing back.", level:79, traits:["SPATIAL","VOID","AGORAPHOBIC"] },
+  { name:"Scopophobia",   etymology:"skopein (to look) + phobos (fear)",meaning:"The unbearable sensation of eyes upon you — real, imagined, or somewhere between.", lore:"The watched feeling is evolutionary. In ancient forests, being watched meant being hunted. Some never forgot.", level:84, traits:["PARANOID","WATCHED","HYPERAWARE"] },
+  { name:"Athazagoraphobia",etymology:"athazagora (forgetfulness) + phobos (fear)",meaning:"The dread of being forgotten, ignored, or rendered utterly invisible by the world.", lore:"To be forgotten is a second death. One that begins while you still breathe and wonder if you matter.", level:91, traits:["SOLITUDE","ERASURE","INVISIBLE"] },
+  { name:"Somniphobia",   etymology:"somnus (sleep) + phobos (fear)", meaning:"Dread of sleep itself — the nightly surrender of consciousness to a world one cannot control.", lore:"Every time you sleep, you die a little. The self dissolves. Whatever wakes is merely similar — never identical.", level:89, traits:["NOCTURNAL","SUBCONSCIOUS","LIMINAL"] },
+  { name:"Apeirophobia",  etymology:"apeiros (infinite) + phobos (fear)",meaning:"Vertigo in the face of eternity — the infinite existence of the universe and your place within it.", lore:"Stare long enough at the night sky. Feel the ground vanish. This is what the afflicted feel when they merely close their eyes.", level:97, traits:["INFINITE","COSMIC","EXISTENTIAL"] },
+  { name:"Phasmophobia",  etymology:"phasma (ghost) + phobos (fear)",  meaning:"Fear of the dead who linger — of the idea that departure is not the same as absence.", lore:"The flicker at the edge of vision. The breath behind you in an empty room. The name spoken in a voice you recognize from grief.", level:87, traits:["SPECTRAL","PARANORMAL","HAUNTED"] },
+  { name:"Autophobia",    etymology:"autos (self) + phobos (fear)",    meaning:"Terror of solitude — the creeping horror of being left entirely alone with yourself.", lore:"We fill silence with noise to avoid the voice that surfaces when all distractions fail. Some have listened too long.", level:83, traits:["ISOLATION","INTROSPECTIVE","EXISTENTIAL"] },
+  { name:"Catoptrophobia",etymology:"katoptron (mirror) + phobos (fear)",meaning:"Dread of mirrors — not of the reflection, but of what the reflection might be hiding.", lore:"Mirrors do not show you as you are. They show a reversed ghost, slightly delayed, blinking a fraction too slow.", level:80, traits:["REFLECTION","UNCANNY","IDENTITY"] },
+  { name:"Thanatophobia",  etymology:"thanatos (death) + phobos (fear)",meaning:"The great and ancient terror — awareness of mortality, carried like cold stone in the chest.", lore:"You have been alive for every moment of your life. That streak will end. Thanatophobia is the refusal to accept this quietly.", level:99, traits:["MORTAL","INEVITABLE","UNIVERSAL"] },
+];
+
+/* ═══════════════════════════════════════════════
+   HISTORY
+═══════════════════════════════════════════════ */
+let readingHistory = JSON.parse(localStorage.getItem('phobiaHistory') || '[]');
+let currentResult  = null;
+
+function saveHistory(name, phobia, level) {
+  readingHistory.unshift({ name, phobia, level, ts: Date.now() });
+  if (readingHistory.length > 5) readingHistory.pop();
+  localStorage.setItem('phobiaHistory', JSON.stringify(readingHistory));
+}
+function renderHistory() {
+  const wrap = document.getElementById('historyWrap');
+  const list = document.getElementById('historyList');
+  if (readingHistory.length === 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  list.innerHTML = '';
+  readingHistory.forEach(h => {
+    const el = document.createElement('div');
+    el.className = 'history-item';
+    el.innerHTML = `
+      <div>
+        <div class="history-item-name">${h.name}</div>
+        <div class="history-item-phobia">${h.phobia}</div>
+      </div>
+      <div class="history-item-level">${h.level}%</div>`;
+    list.appendChild(el);
+  });
+}
+renderHistory();
+
+/* ═══════════════════════════════════════════════
+   TYPEWRITER
+═══════════════════════════════════════════════ */
+function typeWriter(el, text, speed = 35) {
+  return new Promise(res => {
+    el.innerHTML = '';
+    let i = 0;
+    const t = setInterval(() => {
+      el.innerHTML += text[i++];
+      if (i >= text.length) { clearInterval(t); res(); }
+    }, speed);
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   GLITCH EFFECT
+═══════════════════════════════════════════════ */
+function glitchEl(el, text) {
+  el.setAttribute('data-text', text);
+  el.classList.add('glitch','active');
+  setTimeout(() => el.classList.remove('active'), 400);
+}
+
+/* ═══════════════════════════════════════════════
+   AI READING via Anthropic API
+═══════════════════════════════════════════════ */
+async function getAIPhobia(name) {
+  const fallback = PHOBIAS[(name.split('').reduce((a,b)=>a+b.charCodeAt(0),0)) % PHOBIAS.length];
+
+  try {
+    const systemPrompt = `You are an ancient oracle that reads a person's deepest fear from their name. 
+Respond ONLY with a valid JSON object and nothing else. No markdown, no backticks, no explanation.
+The JSON must have exactly these fields:
+{
+  "name": "PhobiaName (one clinical-sounding word ending in -phobia)",
+  "etymology": "greek_root (meaning) + phobos (fear) — brief etymology",
+  "meaning": "One evocative sentence defining this specific phobia (2-3 lines max)",
+  "lore": "Dark, poetic, ancient-sounding lore about this phobia. 2-3 sentences. Ominous. Literary quality.",
+  "level": <integer 70-99>,
+  "traits": ["TRAIT1","TRAIT2","TRAIT3"]
+}
+Be creative and personalize the phobia subtly to the name provided. 
+The phobia should feel truly unique — not necessarily one of the common well-known phobias.
+Keep it dark, literary, and mysterious.`;
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: `The name is: "${name}". Read their deepest fear.` }]
+      })
+    });
+
+    if (!resp.ok) return fallback;
+    const data = await resp.json();
+    const raw  = data.content?.map(c => c.text || '').join('');
+    const clean = raw.replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(clean);
+
+    // Validate
+    if (!parsed.name || !parsed.lore || !parsed.level) return fallback;
+    return parsed;
+
+  } catch(e) {
+    return fallback;
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   DISPLAY RESULT
+═══════════════════════════════════════════════ */
+async function displayResult(fear) {
+  const nameEl  = document.getElementById('phobiaName');
+  const etymEl  = document.getElementById('phobiaEtymology');
+  const meanEl  = document.getElementById('phobiaMeaning');
+  const loreEl  = document.getElementById('fearLore');
+  const meterEl = document.getElementById('fearMeter');
+  const mValEl  = document.getElementById('meterValue');
+  const mLblEl  = document.getElementById('meterLabel');
+  const traitEl = document.getElementById('traitRow');
+  const resultArea = document.getElementById('resultArea');
+
+  resultArea.classList.add('show');
+  resultArea.style.animation = 'none';
+  void resultArea.offsetWidth;
+  resultArea.style.animation = '';
+
+  meterEl.style.width = '0%';
+  traitEl.innerHTML   = '';
+  nameEl.innerHTML    = '';
+  etymEl.innerHTML    = '';
+  meanEl.innerHTML    = '';
+  loreEl.innerHTML    = '';
+
+  // Shake + glitch on reveal
+  document.querySelector('.container').classList.remove('shake');
+  void document.querySelector('.container').offsetWidth;
+  document.querySelector('.container').classList.add('shake');
+
+  playReveal();
+
+  await typeWriter(nameEl, fear.name, 55);
+  glitchEl(nameEl, fear.name);
+
+  await typeWriter(etymEl, fear.etymology || '', 25);
+
+  // Meter animate
+  setTimeout(() => {
+    meterEl.style.width = fear.level + '%';
+    mLblEl.textContent = fear.level + '%';
+    mValEl.textContent = fear.level >= 95 ? '⚠ CRITICAL FEAR LEVEL' :
+                         fear.level >= 85 ? '▲ HIGH FEAR LEVEL' :
+                         '◆ ELEVATED FEAR LEVEL';
+  }, 300);
+
+  await typeWriter(meanEl, fear.meaning, 28);
+  await typeWriter(loreEl, fear.lore, 22);
+
+  // Traits
+  if (fear.traits?.length) {
+    fear.traits.forEach((t, i) => {
+      setTimeout(() => {
+        const span = document.createElement('span');
+        span.className = 'trait';
+        span.textContent = t;
+        traitEl.appendChild(span);
+      }, i * 120);
+    });
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   MAIN LOGIC
+═══════════════════════════════════════════════ */
+const detectBtn  = document.getElementById('detectBtn');
+const nameInput  = document.getElementById('userName');
+const loadingTxt = document.getElementById('loadingText');
+const shareBtn   = document.getElementById('shareBtn');
+const againBtn   = document.getElementById('againBtn');
+
+const LOADING_MESSAGES = [
+  'The void is reading your soul…',
+  'Consulting ancient shadows…',
+  'The oracle peers into the dark…',
+  'Your essence is being weighed…',
+  'Something stirs in the abyss…',
+];
+
+detectBtn.addEventListener('click', async () => {
+  const name = nameInput.value.trim();
+  if (!name) {
+    nameInput.style.borderColor = 'var(--crimson)';
+    nameInput.placeholder = 'The void demands a name…';
+    setTimeout(() => {
+      nameInput.style.borderColor = '';
+      nameInput.placeholder = 'Your name, if you dare…';
+    }, 2000);
+    return;
+  }
+
+  startAmbient();
+  detectBtn.disabled = true;
+  detectBtn.textContent = '…';
+  loadingTxt.textContent = LOADING_MESSAGES[Math.floor(Math.random()*LOADING_MESSAGES.length)];
+  loadingTxt.classList.add('visible');
+
+  // Glitch title during loading
+  const titleEl = document.getElementById('mainTitle');
+  const glitchInterval = setInterval(() => glitchEl(titleEl, 'PHOBIA FINDER'), 700);
+
+  const fear = await getAIPhobia(name);
+  currentResult = { name, fear };
+
+  clearInterval(glitchInterval);
+  loadingTxt.classList.remove('visible');
+
+  saveHistory(name, fear.name, fear.level);
+  renderHistory();
+  await displayResult(fear);
+
+  detectBtn.textContent = 'REVEAL FEAR';
+  detectBtn.disabled = false;
+});
+
+nameInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') detectBtn.click();
+});
+
+nameInput.addEventListener('focus', startAmbient);
+
+/* ── SHARE ── */
+shareBtn.addEventListener('click', () => {
+  if (!currentResult) return;
+  const { name, fear } = currentResult;
+  const text = `🩸 PHOBIA FINDER — Soul Reading 🩸\n\n${name}'s deepest fear:\n${fear.name}\n\n"${fear.meaning}"\n\n${fear.lore}\n\nFear Level: ${fear.level}%\n\n— revealed by Phobia Finder`;
+  navigator.clipboard.writeText(text).then(() => showToast('Copied to the void ✦'));
+});
+
+/* ── AGAIN ── */
+againBtn.addEventListener('click', () => {
+  nameInput.value = '';
+  nameInput.focus();
+  document.getElementById('resultArea').classList.remove('show');
+  currentResult = null;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+/* ── TOAST ── */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+/* ═══════════════════════════════════════════════
+   AMBIENT GLITCH on title (idle)
+═══════════════════════════════════════════════ */
+setInterval(() => {
+  if (Math.random() > .85) glitchEl(document.getElementById('mainTitle'), 'PHOBIA FINDER');
+}, 3500);
+
+/* ═══════════════════════════════════════════════
+   SCROLL CURSOR UPDATE
+═══════════════════════════════════════════════ */
+document.querySelectorAll('button,input,a,.history-item').forEach(el => {
+  el.addEventListener('mouseenter', () => cursor.classList.add('hovering'));
+  el.addEventListener('mouseleave', () => cursor.classList.remove('hovering'));
+});
+</script>
+</body>
+</html>
